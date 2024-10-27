@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Transaction UI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #0d1122;
+            font-family: 'Poppins', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        .container {
+            background: linear-gradient(145deg, #1a233a, #1c2847);
+            padding: 40px;
+            border-radius: 20px;
+            width: 380px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease-in-out;
+        }
+        .container:hover {
+            transform: translateY(-5px);
+        }
+        h2 {
+            font-size: 28px;
+            margin-bottom: 25px;
+            text-align: center;
+            color: #f0f4f8;
+        }
+        input, button, select {
+            width: 100%;
+            padding: 14px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            background-color: #2b3551;
+            color: white;
+            font-size: 16px;
+            transition: border-color 0.3s ease-in-out;
+        }
+        input::placeholder {
+            color: #8f97b0;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border: 1px solid #57a6ff;
+            background-color: #1f2942;
+        }
+        button {
+            background-color: #3a7cfd;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #285dcc;
+        }
+        .small-text {
+            font-size: 14px;
+            color: #8894b4;
+        }
+        .flex {
+            display: flex;
+            justify-content: space-between;
+        }
+        .flex .half-input {
+            width: 48%;
+        }
+        .optional {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #6e82a5;
+            cursor: pointer;
+            text-align: right;
+        }
+        .optional:hover {
+            text-decoration: underline;
+        }
+        .synchronized {
+            font-size: 12px;
+            text-align: right;
+            color: #57a6ff;
+            margin-bottom: 10px;
+        }
+        .estimate-fee {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        .estimate-fee .small-text {
+            color: #a7b3d1;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="synchronized">● SYNCHRONIZED</div>
+    <h2>Send</h2>
+    
+    <input type="text" placeholder="Recipient Address">
+    
+    <div class="flex">
+        <input type="number" class="half-input" placeholder="BTC: 0.0000">
+        <input type="number" class="half-input" placeholder="USD: 0.00">
+    </div>
+
+    <div class="small-text">Available Balance: 0.0 BTC</div>
+
+    <input type="text" placeholder="Note (optional)">
+    
+    <div class="estimate-fee">
+        <div class="small-text">Estimated fee:</div>
+        <div class="small-text">0.0 BTC | 0.00 USD</div>
+    </div>
+    
+    <div class="flex">
+        <select>
+            <option value="" disabled selected>Select Transfer Type</option>
+            <option value="ibc">IBC</option>
+            <option value="shielded">Shielded</option>
+            <option value="transparent">Transparent</option>
+        </select>
+    </div>
+    
+    <div class="optional">Coin control (optional)</div>
+    
+    <button>Send</button>
+</div>
+
+</body>
+</html>

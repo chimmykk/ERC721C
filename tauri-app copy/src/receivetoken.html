@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receive Token</title>
+    <style>
+        /* Reset basic styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0d1122;
+            font-family: 'Poppins', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+
+        .container {
+            background: linear-gradient(145deg, #1a233a, #1c2847);
+            padding: 40px;
+            border-radius: 20px;
+            width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+        }
+
+        .icon {
+            font-size: 24px;
+            color: #ffbf00;
+        }
+
+        .username {
+            margin-left: 10px;
+            font-size: 20px;
+        }
+
+        .status {
+            color: #57a6ff;
+            font-size: 12px;
+        }
+
+        h2 {
+            font-size: 28px;
+            margin-bottom: 25px;
+            text-align: center;
+            color: #f0f4f8;
+        }
+
+        .balance-section,
+        .receive-section {
+            background-color: #2b3551;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .balance-info h2 {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .balance-info span {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .silent-payments {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: #4e52aa;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(16px);
+        }
+
+        .qr-code {
+            width: 200px;
+            height: 200px;
+            background-color: #fff;
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
+        }
+
+        .qr-code img {
+            width: 90%;
+            height: auto;
+        }
+
+        .address-type {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        select {
+            width: 100%;
+            padding: 14px;
+            margin: 10px 0;
+            border-radius: 10px;
+            background-color: #2b3551;
+            border: none;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s ease-in-out;
+        }
+
+        select:focus {
+            border: 1px solid #57a6ff;
+            background-color: #1f2942;
+        }
+
+        .address {
+            margin-top: 20px;
+            word-wrap: break-word;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            background-color: #3a7cfd;
+            color: #fff;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background-color: #285dcc;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        @media (max-width: 768px) {
+            .qr-code {
+                width: 180px;
+                height: 180px;
+            }
+        }
+
+        @media (max-width: 500px) {
+            .container {
+                width: 90%;
+                padding: 20px;
+            }
+
+            .qr-code {
+                width: 150px;
+                height: 150px;
+            }
+
+            h2 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <span class="icon">🪙</span>
+                <span class="username">fghj</span>
+            </div>
+            <div class="status">SYNCHRONIZED</div>
+        </header>
+
+        <div class="content">
+            <!-- <div class="balance-section">
+                <div class="balance-info">
+                    <h2>NAM</h2>
+                    <p>Confirmed Balance</p>
+                    <span>0.0</span> NAM
+                </div> -->
+                <!-- <div class="silent-payments">
+                    <label class="switch">
+                        <input type="checkbox">
+                        <span class="slider"></span>
+                    </label>
+                </div> -->
+            </div>
+
+            <div class="receive-section">
+                <h2>Receive</h2>
+                <div class="qr-code">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?data=bitcoin:bc1qexampleaddress&size=150x150" alt="QR Code">
+                </div>
+                <div class="address-type">
+                    <label for="address-select">Address Type:</label>
+                    <select id="address-select" onchange="updateAddress()">
+                        <option value="transparent">Transparent (Segwit)</option>
+                        <option value="shielded">Shielded (ZK)</option>
+                    </select>
+                </div>
+                <div class="address" id="address-display">
+                    bc1qf6zfy4we300vjx3fn0dnwwtjg33f0uvha8c4de
+                </div>
+                <button onclick="copyAddress()">Copy Address</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateAddress() {
+            const addressDisplay = document.getElementById('address-display');
+            const qrCode = document.querySelector('.qr-code img');
+            const addressType = document.getElementById('address-select').value;
+
+            if (addressType === 'transparent') {
+                addressDisplay.textContent = 'bc1qf6zfy4we300vjx3fn0dnwwtjg33f0uvha8c4de';
+                qrCode.src = 'https://api.qrserver.com/v1/create-qr-code/?data=bitcoin:bc1qf6zfy4we300vjx3fn0dnwwtjg33f0uvha8c4de&size=150x150';
+            } else {
+                addressDisplay.textContent = 'zs1p4vexampleaddressshieldedzksnarks';
+                qrCode.src = 'https://api.qrserver.com/v1/create-qr-code/?data=bitcoin:zs1p4vexampleaddressshieldedzksnarks&size=150x150';
+            }
+        }
+
+        function copyAddress() {
+            const addressDisplay = document.getElementById('address-display');
+            const textarea = document.createElement('textarea');
+            textarea.value = addressDisplay.textContent;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            alert('Address copied to clipboard!');
+        }
+    </script>
+</body>
+</html>
