@@ -12,13 +12,14 @@ app.use(express.json());
 
 // CORS configuration
 const corsOptions = {
-  origin: 'http://localhost:3000', // Replace with the frontend domain you want to allow, or '*' to allow all origins
+  origin: 'https://peekcells.vercel.app', // Replace with the frontend domain you want to allow
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-// Use CORS middleware
+// Apply the CORS middleware
 app.use(cors(corsOptions));
+
 
 // Replace with your contract ABI (simplified here for demonstration)
 const contractABI = [
@@ -57,7 +58,7 @@ function readLastTransferredTokenId() {
       return parseInt(data, 10);
     } else {
       // If the file doesn't exist, start from 38
-      return 41;
+      return 42;
     }
   } catch (error) {
     console.error('Error reading file:', error);
@@ -79,7 +80,7 @@ async function checkBurnCount(toAddress) {
   try {
     console.log('Checking burn count for address:', toAddress);
 
-    const response = await axios.get(`http://localhost:3000/api/countcheck?walletAddress=${toAddress}`);
+    const response = await axios.get(`https://peekcells.vercel.app/api/countcheck?walletAddress=${toAddress}`);
     console.log('Burn Count Response:', response.data);
 
     if (response.data && response.data.success) {
