@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors'); // Importing the CORS package
+const cors = require('cors');
 const app = express();
 
 // Middleware to parse JSON request bodies
@@ -20,35 +20,27 @@ const corsOptions = {
 // Apply the CORS middleware
 app.use(cors(corsOptions));
 
-
-// Replace with your contract ABI (simplified here for demonstration)
+// Contract ABI and Address
 const contractABI = [
   "function safeTransferFrom(address from, address to, uint256 tokenId) public",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
   "event Unlocked(uint256 tokenId)"
 ];
-
-// The contract address
 const contractAddress = '0xd8e909bB2a1733AAA95E62d6257a87fd0b4064A0';
-
-// ApeChain RPC URL
 const rpcURL = 'https://rpc.apechain.com';
-
-// Private key for signing the transaction (use environment variable for security)
 const privateKey = process.env.PRIVATE_KEY || '7b5a35c89f72170cbc017daaf18c2ae2a6f2af969d2f0734d84abf4959866b90';
 
 // Set up the provider and wallet
 const provider = new ethers.JsonRpcProvider(rpcURL);
 const wallet = new ethers.Wallet(privateKey, provider);
-
-// Set up the contract
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
 // Example: Sender's address (from)
-const fromAddress = wallet.address; // Sender's address (wallet address)
+const fromAddress = wallet.address;
 
-// Path to the file that tracks the last transferred tokenId
+// Path to the files that track the last transferred tokenId and claimed addresses
 const countFilePath = path.join(__dirname, 'transferCount.txt');
+const claimFilePath = path.join(__dirname, 'claim.txt');
 
 // Function to read the last transferred tokenId from the file
 function readLastTransferredTokenId() {
@@ -57,12 +49,11 @@ function readLastTransferredTokenId() {
       const data = fs.readFileSync(countFilePath, 'utf8');
       return parseInt(data, 10);
     } else {
-      // If the file doesn't exist, start from 38
-      return 42;
+      return 42; // Starting point if file doesn't exist
     }
   } catch (error) {
-    console.error('Error reading file:', error);
-    return 0;
+    console.error('Error reading last transferred tokenId:', error);
+    return 42;
   }
 }
 
@@ -71,18 +62,37 @@ function saveLastTransferredTokenId(tokenId) {
   try {
     fs.writeFileSync(countFilePath, tokenId.toString(), 'utf8');
   } catch (error) {
-    console.error('Error writing to file:', error);
+    console.error('Error writing last transferred tokenId to file:', error);
+  }
+}
+
+// Function to read the claimed addresses from the file
+function readClaimedAddresses() {
+  try {
+    if (fs.existsSync(claimFilePath)) {
+      const data = fs.readFileSync(claimFilePath, 'utf8');
+      return data.split('\n').filter(Boolean); // Split by line and remove empty entries
+    }
+    return [];
+  } catch (error) {
+    console.error('Error reading claimed addresses file:', error);
+    return [];
+  }
+}
+
+// Function to save the claimed address to the file
+function saveClaimedAddress(address) {
+  try {
+    fs.appendFileSync(claimFilePath, address + '\n', 'utf8');
+  } catch (error) {
+    console.error('Error writing to claimed addresses file:', error);
   }
 }
 
 // Function to check burn count from the provided API
 async function checkBurnCount(toAddress) {
   try {
-    console.log('Checking burn count for address:', toAddress);
-
     const response = await axios.get(`https://peekcells.vercel.app/api/countcheck?walletAddress=${toAddress}`);
-    console.log('Burn Count Response:', response.data);
-
     if (response.data && response.data.success) {
       return response.data.burnCount;
     } else {
@@ -90,7 +100,7 @@ async function checkBurnCount(toAddress) {
       return null;
     }
   } catch (error) {
-    console.error('Error checking burn count:', error.response ? error.response.data : error.message);
+    console.error('Error checking burn count:', error);
     return null;
   }
 }
@@ -98,6 +108,11 @@ async function checkBurnCount(toAddress) {
 // Transfer the next tokenId and update the count
 async function transferToken(toAddress) {
   try {
+    const claimedAddresses = readClaimedAddresses();
+    if (claimedAddresses.includes(toAddress)) {
+      return { success: false, message: 'Address has already claimed a token.' };
+    }
+
     // Check the burn count for the recipient address
     const burnCount = await checkBurnCount(toAddress);
     if (burnCount === null) {
@@ -110,20 +125,15 @@ async function transferToken(toAddress) {
 
     let tokenId = readLastTransferredTokenId();
     if (tokenId > 100) {
-      console.log('All tokens from 0 to 100 have been transferred.');
-      return { success: false, message: 'All tokens have been transferred.' };
+      return { success: false, message: 'All tokens from 0 to 100 have been transferred.' };
     }
 
     // Send the safe transfer transaction
-    console.log(`Transferring token with ID: ${tokenId}`);
     const tx = await contract.safeTransferFrom(fromAddress, toAddress, tokenId);
-    console.log(`Transaction Hash: ${tx.hash}`);
+    await tx.wait(); // Wait for the transaction to be mined
 
-    // Wait for the transaction to be mined
-    await tx.wait();
-    console.log('Transfer successful!');
-
-    // Update and save the next tokenId to transfer
+    // Save the address as claimed and update tokenId
+    saveClaimedAddress(toAddress);
     saveLastTransferredTokenId(tokenId + 1);
 
     return { success: true, message: 'Transfer successful!', transactionHash: tx.hash };
@@ -141,9 +151,7 @@ app.post('/claimtoken', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Recipient address (toAddress) is required.' });
   }
 
-  // Call the transfer function and respond accordingly
   const result = await transferToken(toAddress);
-
   if (result.success) {
     return res.status(200).json(result);
   } else {
