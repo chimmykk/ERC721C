@@ -92,7 +92,7 @@ function saveClaimedAddress(address) {
 // Function to check burn count from the provided API
 async function checkBurnCount(toAddress) {
   try {
-    const response = await axios.get(`https://peekcells.vercel.app/api/countcheck?walletAddress=${toAddress}`);
+    const response = await axios.get(`https://miniburn.peekcell.art/api/countcheck?walletAddress=${toAddress}`);
     if (response.data && response.data.success) {
       return response.data.burnCount;
     } else {
