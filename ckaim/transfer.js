@@ -12,7 +12,7 @@ app.use(express.json());
 
 // CORS configuration
 const corsOptions = {
-  origin: 'https://peekcells.vercel.app', // Replace with the frontend domain you want to allow
+  origin: 'https://miniburn.peekcell.art', // Replace with the frontend domain you want to allow
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
