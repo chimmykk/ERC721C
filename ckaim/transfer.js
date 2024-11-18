@@ -1,10 +1,10 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 
 // Middleware to parse JSON request bodies
@@ -20,13 +20,11 @@ const corsOptions = {
 // Apply the CORS middleware
 app.use(cors(corsOptions));
 
-// Contract ABI and Address
+// Contract ABI and Address for ERC-1155
 const contractABI = [
-  "function safeTransferFrom(address from, address to, uint256 tokenId) public",
-  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
-  "event Unlocked(uint256 tokenId)"
+  "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data) public",
 ];
-const contractAddress = '0xd8e909bB2a1733AAA95E62d6257a87fd0b4064A0';
+const contractAddress = '0xf24E1D553ED7D5872eBE92E03e92Cb46892ec4E5';
 const rpcURL = 'https://rpc.apechain.com';
 const privateKey = process.env.PRIVATE_KEY || '7b5a35c89f72170cbc017daaf18c2ae2a6f2af969d2f0734d84abf4959866b90';
 
@@ -38,55 +36,37 @@ const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 // Example: Sender's address (from)
 const fromAddress = wallet.address;
 
-// Path to the files that track the last transferred tokenId and claimed addresses
-const countFilePath = path.join(__dirname, 'transferCount.txt');
-const claimFilePath = path.join(__dirname, 'claim.txt');
+// Path to the CSV file that tracks claims
+const claimsFilePath = path.join(__dirname, 'claims.csv');
 
-// Function to read the last transferred tokenId from the file
-function readLastTransferredTokenId() {
-  try {
-    if (fs.existsSync(countFilePath)) {
-      const data = fs.readFileSync(countFilePath, 'utf8');
-      return parseInt(data, 10);
-    } else {
-      return 42; // Starting point if file doesn't exist
-    }
-  } catch (error) {
-    console.error('Error reading last transferred tokenId:', error);
-    return 42;
+// Function to read and parse the CSV file into a JavaScript object
+function readClaims() {
+  if (!fs.existsSync(claimsFilePath)) {
+    return {};
   }
+
+  const data = fs.readFileSync(claimsFilePath, 'utf8');
+  const lines = data.split('\n').filter(Boolean);
+  const claims = {};
+
+  lines.forEach(line => {
+    const [address, count] = line.split(',');
+    claims[address] = parseInt(count, 10);
+  });
+
+  return claims;
 }
 
-// Function to save the last transferred tokenId to the file
-function saveLastTransferredTokenId(tokenId) {
-  try {
-    fs.writeFileSync(countFilePath, tokenId.toString(), 'utf8');
-  } catch (error) {
-    console.error('Error writing last transferred tokenId to file:', error);
-  }
-}
+// Function to update the CSV file with new claims data
+function updateClaims(address, newCount) {
+  const claims = readClaims();
+  claims[address] = newCount;
 
-// Function to read the claimed addresses from the file
-function readClaimedAddresses() {
-  try {
-    if (fs.existsSync(claimFilePath)) {
-      const data = fs.readFileSync(claimFilePath, 'utf8');
-      return data.split('\n').filter(Boolean); // Split by line and remove empty entries
-    }
-    return [];
-  } catch (error) {
-    console.error('Error reading claimed addresses file:', error);
-    return [];
-  }
-}
+  const data = Object.entries(claims)
+    .map(([addr, count]) => `${addr},${count}`)
+    .join('\n');
 
-// Function to save the claimed address to the file
-function saveClaimedAddress(address) {
-  try {
-    fs.appendFileSync(claimFilePath, address + '\n', 'utf8');
-  } catch (error) {
-    console.error('Error writing to claimed addresses file:', error);
-  }
+  fs.writeFileSync(claimsFilePath, data, 'utf8');
 }
 
 // Function to check burn count from the provided API
@@ -105,13 +85,24 @@ async function checkBurnCount(toAddress) {
   }
 }
 
-// Transfer the next tokenId and update the count
+// Determine the maximum allowable claims based on burn count tiers
+function getMaxClaimsByBurnCount(burnCount) {
+  if (burnCount >= 25) {
+    return 3; // Tier 1
+  } else if (burnCount >= 15) {
+    return 2; // Tier 2
+  } else if (burnCount >= 5) {
+    return 1; // Tier 3
+  }
+  return 0; // Not eligible
+}
+
+// Transfer the specific token ID 0
 async function transferToken(toAddress) {
   try {
-    const claimedAddresses = readClaimedAddresses();
-    if (claimedAddresses.includes(toAddress)) {
-      return { success: false, message: 'Address has already claimed a token.' };
-    }
+    // Read claims data
+    const claims = readClaims();
+    const currentClaims = claims[toAddress] || 0;
 
     // Check the burn count for the recipient address
     const burnCount = await checkBurnCount(toAddress);
@@ -119,22 +110,25 @@ async function transferToken(toAddress) {
       return { success: false, message: 'Error fetching burn count for the recipient.' };
     }
 
-    if (burnCount < 5) {
-      return { success: false, message: 'Recipient does not have enough burn count (5 required).' };
+    // Determine the maximum allowable claims based on the burn count
+    const maxClaims = getMaxClaimsByBurnCount(burnCount);
+    if (maxClaims === 0) {
+      return { success: false, message: 'Recipient does not have enough burn count to claim a token.' };
     }
 
-    let tokenId = readLastTransferredTokenId();
-    if (tokenId > 100) {
-      return { success: false, message: 'All tokens from 0 to 100 have been transferred.' };
+    // Check if the user has already reached their allowable claim limit
+    if (currentClaims >= maxClaims) {
+      return { success: false, message: `Address has reached the maximum claim limit of ${maxClaims} for their burn count tier.` };
     }
 
-    // Send the safe transfer transaction
-    const tx = await contract.safeTransferFrom(fromAddress, toAddress, tokenId);
+    // Send the safe transfer transaction with token ID 0 and amount 1
+    const tokenId = 0;
+    const amount = 1;
+    const tx = await contract.safeTransferFrom(fromAddress, toAddress, tokenId, amount, '0x');
     await tx.wait(); // Wait for the transaction to be mined
 
-    // Save the address as claimed and update tokenId
-    saveClaimedAddress(toAddress);
-    saveLastTransferredTokenId(tokenId + 1);
+    // Update the claim count after a successful transfer
+    updateClaims(toAddress, currentClaims + 1);
 
     return { success: true, message: 'Transfer successful!', transactionHash: tx.hash };
   } catch (error) {
