@@ -1,10 +1,12 @@
 require('dotenv').config();
-const { ethers } = require('ethers');
 const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
 const fs = require('fs');
-const path = require('path');
+const { parse } = require('csv-parser');
+const { createObjectCsvWriter } = require('csv-writer');
+const { ethers } = require('ethers');
+const cors = require('cors');
+
 const app = express();
 
 // Middleware to parse JSON request bodies
@@ -12,130 +14,78 @@ app.use(express.json());
 
 // CORS configuration
 const corsOptions = {
-  origin: 'https://miniburn.peekcell.art', // Replace with the frontend domain you want to allow
+  origin: 'https://miniburn.peekcell.art',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-// Apply the CORS middleware
 app.use(cors(corsOptions));
 
 // Contract ABI and Address for ERC-1155
 const contractABI = [
   "function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes data) public",
 ];
-const contractAddress = '0xf24E1D553ED7D5872eBE92E03e92Cb46892ec4E5';
+const contractAddress = '0x46396a9A78a6CD91A5784EBE01bd0c162c0bE7B9';
 const rpcURL = 'https://rpc.apechain.com';
 const privateKey = process.env.PRIVATE_KEY || '7b5a35c89f72170cbc017daaf18c2ae2a6f2af969d2f0734d84abf4959866b90';
 
-// Set up the provider and wallet
 const provider = new ethers.JsonRpcProvider(rpcURL);
 const wallet = new ethers.Wallet(privateKey, provider);
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
-
-// Example: Sender's address (from)
 const fromAddress = wallet.address;
 
-// Path to the CSV file that tracks claims
-const claimsFilePath = path.join(__dirname, 'claims.csv');
+// Paths to CSV files
+const canClaimCsvPath = './canclaim.csv';
+const cannotClaimCsvPath = './cannotclaim.csv';
 
-// Function to read and parse the CSV file into a JavaScript object
-function readClaims() {
-  if (!fs.existsSync(claimsFilePath)) {
-    return {};
+// Ensure CSV files exist
+const ensureCsvFilesExist = () => {
+  if (!fs.existsSync(canClaimCsvPath)) {
+    fs.writeFileSync(canClaimCsvPath, 'address\n'); // Create header
   }
+  if (!fs.existsSync(cannotClaimCsvPath)) {
+    fs.writeFileSync(cannotClaimCsvPath, 'address\n'); // Create header
+  }
+};
+ensureCsvFilesExist();
 
-  const data = fs.readFileSync(claimsFilePath, 'utf8');
-  const lines = data.split('\n').filter(Boolean);
-  const claims = {};
+// Function to read CSV and return an array of addresses
+const readCsv = (filePath) => {
+  const addresses = [];
+  fs.createReadStream(filePath)
+    .pipe(parse({ headers: false }))
+    .on('data', (row) => {
+      addresses.push(row['address'].toLowerCase());
+    });
+  return addresses;
+};
 
-  lines.forEach(line => {
-    const [address, count] = line.split(',');
-    claims[address] = parseInt(count, 10);
+// Function to add an address to the CSV file
+const writeToCsv = (filePath, address) => {
+  const csvWriter = createObjectCsvWriter({
+    path: filePath,
+    header: [{ id: 'address', title: 'address' }],
+    append: true,
   });
+  csvWriter.writeRecords([{ address }])
+    .then(() => console.log(`Added ${address} to ${filePath}`));
+};
 
-  return claims;
-}
+// Function to move address from `canclaim.csv` to `cannotclaim.csv`
+const moveAddressToCannotClaim = (address) => {
+  const canClaimAddresses = readCsv(canClaimCsvPath);
+  const filteredAddresses = canClaimAddresses.filter(addr => addr !== address.toLowerCase());
+  fs.writeFileSync(canClaimCsvPath, 'address\n');
+  filteredAddresses.forEach(addr => writeToCsv(canClaimCsvPath, addr));
 
-// Function to update the CSV file with new claims data
-function updateClaims(address, newCount) {
-  const claims = readClaims();
-  claims[address] = newCount;
+  writeToCsv(cannotClaimCsvPath, address);
+};
 
-  const data = Object.entries(claims)
-    .map(([addr, count]) => `${addr},${count}`)
-    .join('\n');
-
-  fs.writeFileSync(claimsFilePath, data, 'utf8');
-}
-
-// Function to check burn count from the provided API
-async function checkBurnCount(toAddress) {
-  try {
-    const response = await axios.get(`https://miniburn.peekcell.art/api/countcheck?walletAddress=${toAddress}`);
-    if (response.data && response.data.success) {
-      return response.data.burnCount;
-    } else {
-      console.error('Invalid response or burnCount missing.');
-      return null;
-    }
-  } catch (error) {
-    console.error('Error checking burn count:', error);
-    return null;
-  }
-}
-
-// Determine the maximum allowable claims based on burn count tiers
-function getMaxClaimsByBurnCount(burnCount) {
-  if (burnCount >= 25) {
-    return 3; // Tier 1
-  } else if (burnCount >= 15) {
-    return 2; // Tier 2
-  } else if (burnCount >= 5) {
-    return 1; // Tier 3
-  }
-  return 0; // Not eligible
-}
-
-// Transfer the specific token ID 0
-async function transferToken(toAddress) {
-  try {
-    // Read claims data
-    const claims = readClaims();
-    const currentClaims = claims[toAddress] || 0;
-
-    // Check the burn count for the recipient address
-    const burnCount = await checkBurnCount(toAddress);
-    if (burnCount === null) {
-      return { success: false, message: 'Error fetching burn count for the recipient.' };
-    }
-
-    // Determine the maximum allowable claims based on the burn count
-    const maxClaims = getMaxClaimsByBurnCount(burnCount);
-    if (maxClaims === 0) {
-      return { success: false, message: 'Recipient does not have enough burn count to claim a token.' };
-    }
-
-    // Check if the user has already reached their allowable claim limit
-    if (currentClaims >= maxClaims) {
-      return { success: false, message: `Address has reached the maximum claim limit of ${maxClaims} for their burn count tier.` };
-    }
-
-    // Send the safe transfer transaction with token ID 0 and amount 1
-    const tokenId = 0;
-    const amount = 1;
-    const tx = await contract.safeTransferFrom(fromAddress, toAddress, tokenId, amount, '0x');
-    await tx.wait(); // Wait for the transaction to be mined
-
-    // Update the claim count after a successful transfer
-    updateClaims(toAddress, currentClaims + 1);
-
-    return { success: true, message: 'Transfer successful!', transactionHash: tx.hash };
-  } catch (error) {
-    console.error('Error during transfer:', error);
-    return { success: false, message: 'Error during transfer.', error: error.message };
-  }
-}
+// Function to check if the address is eligible to claim
+const isEligibleToClaim = async (toAddress) => {
+  const canClaimAddresses = readCsv(canClaimCsvPath);
+  return canClaimAddresses.includes(toAddress.toLowerCase());
+};
 
 // POST endpoint to claim a token
 app.post('/claimtoken', async (req, res) => {
@@ -145,11 +95,54 @@ app.post('/claimtoken', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Recipient address (toAddress) is required.' });
   }
 
-  const result = await transferToken(toAddress);
-  if (result.success) {
-    return res.status(200).json(result);
-  } else {
-    return res.status(500).json(result);
+  try {
+    // Check if the address is eligible to claim
+    const eligible = await isEligibleToClaim(toAddress);
+    if (!eligible) {
+      return res.status(400).json({ success: false, message: 'This address is not eligible to claim a token.' });
+    }
+
+    // Send the safe transfer transaction with token ID 0 and amount 1
+    const tokenId = 0;
+    const amount = 1;
+    const tx = await contract.safeTransferFrom(fromAddress, toAddress, tokenId, amount, '0x');
+    await tx.wait(); // Wait for the transaction to be mined
+
+    // Move the address to cannotclaim.csv
+    moveAddressToCannotClaim(toAddress);
+
+    return res.status(200).json({ success: true, message: 'Transfer successful!', transactionHash: tx.hash });
+  } catch (error) {
+    console.error('Error during claim:', error);
+    return res.status(500).json({ success: false, message: 'Error during claim.', error: error.message });
+  }
+});
+
+// POST endpoint to add an address to the `canclaim.csv`
+app.post('/sentcanclaimaddress', async (req, res) => {
+  const { address } = req.body;
+
+  if (!address) {
+    return res.status(400).json({ success: false, message: 'Address is required.' });
+  }
+
+  try {
+    // Convert the address to lowercase for consistency
+    const lowerCaseAddress = address.toLowerCase();
+
+    // Check if the address is already in the `canclaim.csv`
+    const canClaimAddresses = readCsv(canClaimCsvPath);
+    if (canClaimAddresses.includes(lowerCaseAddress)) {
+      return res.status(400).json({ success: false, message: 'This address is already in the canclaim list.' });
+    }
+
+    // Add the address to `canclaim.csv`
+    writeToCsv(canClaimCsvPath, lowerCaseAddress);
+
+    return res.status(200).json({ success: true, message: 'Address added to canclaim.csv.' });
+  } catch (error) {
+    console.error('Error adding address to canclaim.csv:', error);
+    return res.status(500).json({ success: false, message: 'Error adding address to canclaim.csv.', error: error.message });
   }
 });
 
