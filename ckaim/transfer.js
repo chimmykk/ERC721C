@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
-const { parse } = require('csv-parser');
+const csv = require('csv-parser');
 const { createObjectCsvWriter } = require('csv-writer');
 const { ethers } = require('ethers');
 const cors = require('cors');
@@ -51,13 +51,22 @@ ensureCsvFilesExist();
 
 // Function to read CSV and return an array of addresses
 const readCsv = (filePath) => {
-  const addresses = [];
-  fs.createReadStream(filePath)
-    .pipe(parse({ headers: false }))
-    .on('data', (row) => {
-      addresses.push(row['address'].toLowerCase());
-    });
-  return addresses;
+  return new Promise((resolve, reject) => {
+    const addresses = [];
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (row) => {
+        if (row.address) {
+          addresses.push(row.address.toLowerCase());
+        }
+      })
+      .on('end', () => {
+        resolve(addresses);
+      })
+      .on('error', (error) => {
+        reject(error);
+      });
+  });
 };
 
 // Function to add an address to the CSV file
@@ -67,23 +76,35 @@ const writeToCsv = (filePath, address) => {
     header: [{ id: 'address', title: 'address' }],
     append: true,
   });
-  csvWriter.writeRecords([{ address }])
+  return csvWriter.writeRecords([{ address }])
     .then(() => console.log(`Added ${address} to ${filePath}`));
 };
 
 // Function to move address from `canclaim.csv` to `cannotclaim.csv`
-const moveAddressToCannotClaim = (address) => {
-  const canClaimAddresses = readCsv(canClaimCsvPath);
-  const filteredAddresses = canClaimAddresses.filter(addr => addr !== address.toLowerCase());
-  fs.writeFileSync(canClaimCsvPath, 'address\n');
-  filteredAddresses.forEach(addr => writeToCsv(canClaimCsvPath, addr));
+const moveAddressToCannotClaim = async (address) => {
+  try {
+    const canClaimAddresses = await readCsv(canClaimCsvPath);
+    const filteredAddresses = canClaimAddresses.filter(addr => addr !== address.toLowerCase());
+    
+    // Rewrite canclaim.csv with filtered addresses
+    const canClaimCsvWriter = createObjectCsvWriter({
+      path: canClaimCsvPath,
+      header: [{ id: 'address', title: 'address' }],
+    });
+    await canClaimCsvWriter.writeRecords(
+      filteredAddresses.map(addr => ({ address: addr }))
+    );
 
-  writeToCsv(cannotClaimCsvPath, address);
+    // Add to cannotclaim.csv
+    await writeToCsv(cannotClaimCsvPath, address);
+  } catch (error) {
+    console.error('Error moving address:', error);
+  }
 };
 
 // Function to check if the address is eligible to claim
 const isEligibleToClaim = async (toAddress) => {
-  const canClaimAddresses = readCsv(canClaimCsvPath);
+  const canClaimAddresses = await readCsv(canClaimCsvPath);
   return canClaimAddresses.includes(toAddress.toLowerCase());
 };
 
@@ -109,7 +130,7 @@ app.post('/claimtoken', async (req, res) => {
     await tx.wait(); // Wait for the transaction to be mined
 
     // Move the address to cannotclaim.csv
-    moveAddressToCannotClaim(toAddress);
+    await moveAddressToCannotClaim(toAddress);
 
     return res.status(200).json({ success: true, message: 'Transfer successful!', transactionHash: tx.hash });
   } catch (error) {
@@ -131,13 +152,13 @@ app.post('/sentcanclaimaddress', async (req, res) => {
     const lowerCaseAddress = address.toLowerCase();
 
     // Check if the address is already in the `canclaim.csv`
-    const canClaimAddresses = readCsv(canClaimCsvPath);
+    const canClaimAddresses = await readCsv(canClaimCsvPath);
     if (canClaimAddresses.includes(lowerCaseAddress)) {
       return res.status(400).json({ success: false, message: 'This address is already in the canclaim list.' });
     }
 
     // Add the address to `canclaim.csv`
-    writeToCsv(canClaimCsvPath, lowerCaseAddress);
+    await writeToCsv(canClaimCsvPath, lowerCaseAddress);
 
     return res.status(200).json({ success: true, message: 'Address added to canclaim.csv.' });
   } catch (error) {
